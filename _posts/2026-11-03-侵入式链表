@@ -1,0 +1,445 @@
+---
+title: 侵入式链表
+date: 2026-11-03 11:19:00 +0800
+tags: [C++]
+description: 关于侵入式链表的基础讲解
+---
+
+侵入式链表（Intrusive Linked List）是一种把链表节点直接嵌入业务对象内部的数据结构。
+
+它和普通链表最大的区别是：
+
+* 普通链表：链表节点是独立对象，节点通过指针指向业务数据。
+
+* 侵入式链表：业务对象本身就包含链表节点，不需要额外创建一个节点来包装它。
+
+侵入式链表广泛应用于 Linux 内核、操作系统调度器、内存管理器以及高性能网络框架。
+
+我们从内存布局开始理解它为什么高效。
+
+## 1. 普通链表和侵入式链表有什么区别？
+
+假设我们需要管理一批任务，每个任务包含 `id` 和 `priority`。
+
+### 普通链表
+
+C++
+
+```
+struct Task {
+    int id;
+    int priority;
+};
+
+struct Node {
+    Task* data;
+    Node* prev;
+    Node* next;
+};
+```
+
+内存结构大致如下：
+
+普通链表：节点与对象分离
+
+![](data\:image/svg+xml;charset=utf-8,%3Csvg%20font-family%3D%22-apple-system-body%2C%20ui-sans-serif%2C%20-apple-system%2C%20system-ui%2C%20%26quot%3BSegoe%20UI%26quot%3B%2C%20Helvetica%2C%20%26quot%3BApple%20Color%20Emoji%26quot%3B%2C%20Arial%2C%20sans-serif%2C%20%26quot%3BSegoe%20UI%20Emoji%26quot%3B%2C%20%26quot%3BSegoe%20UI%20Symbol%26quot%3B%22%20font-weight%3D%22400%22%20data-d-component%3D%22svg%22%20fill%3D%22currentColor%22%20style%3D%22color%3Argb\(255%2C%20255%2C%20255\)%22%20viewBox%3D%220%200%20340%20150%22%20width%3D%22100%25%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20x%3D%229%22%20y%3D%2215%22%20width%3D%2292%22%20height%3D%2243%22%20rx%3D%226%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%2255%22%20y%3D%2232%22%20font-size%3D%2212%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3ENode%201%3C%2Ftext%3E%3Ctext%20x%3D%2255%22%20y%3D%2247%22%20font-size%3D%229%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3Edata%20%2F%20prev%20%2F%20next%3C%2Ftext%3E%3Cpath%20d%3D%22M%2055%2058%20V%20101%22%20stroke%3D%22%23C38A35%22%20stroke-dasharray%3D%224%203%22%20stroke-width%3D%221.8%22%2F%3E%3Cpath%20d%3D%22M%2051%2096%20l4%205%204%20-5%22%20fill%3D%22none%22%20stroke%3D%22%23C38A35%22%20stroke-width%3D%221.8%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%22102%22%20width%3D%2292%22%20height%3D%2233%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%2255%22%20y%3D%22122%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%201%3C%2Ftext%3E%3Cpath%20d%3D%22M%20102%2033%20H%20122%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%222%22%2F%3E%3Cpath%20d%3D%22M%20117%2029%20l5%204%20-5%204%22%20stroke%3D%22%23548BC8%22%20fill%3D%22none%22%20stroke-width%3D%221.5%22%2F%3E%3Crect%20x%3D%22124%22%20y%3D%2215%22%20width%3D%2292%22%20height%3D%2243%22%20rx%3D%226%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2232%22%20font-size%3D%2212%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3ENode%202%3C%2Ftext%3E%3Ctext%20x%3D%22170%22%20y%3D%2247%22%20font-size%3D%229%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3Edata%20%2F%20prev%20%2F%20next%3C%2Ftext%3E%3Cpath%20d%3D%22M%20170%2058%20V%20101%22%20stroke%3D%22%23C38A35%22%20stroke-dasharray%3D%224%203%22%20stroke-width%3D%221.8%22%2F%3E%3Cpath%20d%3D%22M%20166%2096%20l4%205%204%20-5%22%20fill%3D%22none%22%20stroke%3D%22%23C38A35%22%20stroke-width%3D%221.8%22%2F%3E%3Crect%20x%3D%22124%22%20y%3D%22102%22%20width%3D%2292%22%20height%3D%2233%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%22122%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%202%3C%2Ftext%3E%3Cpath%20d%3D%22M%20217%2033%20H%20237%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%222%22%2F%3E%3Cpath%20d%3D%22M%20232%2029%20l5%204%20-5%204%22%20stroke%3D%22%23548BC8%22%20fill%3D%22none%22%20stroke-width%3D%221.5%22%2F%3E%3Crect%20x%3D%22239%22%20y%3D%2215%22%20width%3D%2292%22%20height%3D%2243%22%20rx%3D%226%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%22285%22%20y%3D%2232%22%20font-size%3D%2212%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3ENode%203%3C%2Ftext%3E%3Ctext%20x%3D%22285%22%20y%3D%2247%22%20font-size%3D%229%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3Edata%20%2F%20prev%20%2F%20next%3C%2Ftext%3E%3Cpath%20d%3D%22M%20285%2058%20V%20101%22%20stroke%3D%22%23C38A35%22%20stroke-dasharray%3D%224%203%22%20stroke-width%3D%221.8%22%2F%3E%3Cpath%20d%3D%22M%20281%2096%20l4%205%204%20-5%22%20fill%3D%22none%22%20stroke%3D%22%23C38A35%22%20stroke-width%3D%221.8%22%2F%3E%3Crect%20x%3D%22239%22%20y%3D%22102%22%20width%3D%2292%22%20height%3D%2233%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%22285%22%20y%3D%22122%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%203%3C%2Ftext%3E%3C%2Fsvg%3E)蓝色是链表节点，黄色是业务对象。访问 Task 需要通过 data 指针间接访问。
+
+这种设计虽然通用，但会产生额外的节点对象。
+
+### 侵入式链表
+
+C++
+
+```
+struct ListNode {
+    ListNode* prev;
+    ListNode* next;
+};
+
+struct Task {
+    int id;
+    int priority;
+    ListNode node;
+};
+```
+
+内存结构变成：
+
+侵入式链表：节点嵌入对象
+
+![](data\:image/svg+xml;charset=utf-8,%3Csvg%20font-family%3D%22-apple-system-body%2C%20ui-sans-serif%2C%20-apple-system%2C%20system-ui%2C%20%26quot%3BSegoe%20UI%26quot%3B%2C%20Helvetica%2C%20%26quot%3BApple%20Color%20Emoji%26quot%3B%2C%20Arial%2C%20sans-serif%2C%20%26quot%3BSegoe%20UI%20Emoji%26quot%3B%2C%20%26quot%3BSegoe%20UI%20Symbol%26quot%3B%22%20font-weight%3D%22400%22%20data-d-component%3D%22svg%22%20fill%3D%22currentColor%22%20style%3D%22color%3Argb\(255%2C%20255%2C%20255\)%22%20viewBox%3D%220%200%20340%20115%22%20width%3D%22100%25%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20x%3D%229%22%20y%3D%2221%22%20width%3D%2292%22%20height%3D%2272%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%2255%22%20y%3D%2238%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%201%3C%2Ftext%3E%3Ctext%20x%3D%2255%22%20y%3D%2252%22%20font-size%3D%229%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3Eid%20%2F%20priority%3C%2Ftext%3E%3Crect%20x%3D%2217%22%20y%3D%2260%22%20width%3D%2276%22%20height%3D%2224%22%20rx%3D%224%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%2255%22%20y%3D%2276%22%20font-size%3D%2211%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3EListNode%3C%2Ftext%3E%3Cpath%20d%3D%22M%2093%2067%20H%20132%20V%2072%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%221.8%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M%20128%2068%20l4%204%204%20-4%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%2F%3E%3Crect%20x%3D%22124%22%20y%3D%2221%22%20width%3D%2292%22%20height%3D%2272%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2238%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%202%3C%2Ftext%3E%3Ctext%20x%3D%22170%22%20y%3D%2252%22%20font-size%3D%229%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3Eid%20%2F%20priority%3C%2Ftext%3E%3Crect%20x%3D%22132%22%20y%3D%2260%22%20width%3D%2276%22%20height%3D%2224%22%20rx%3D%224%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2276%22%20font-size%3D%2211%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3EListNode%3C%2Ftext%3E%3Cpath%20d%3D%22M%20208%2067%20H%20247%20V%2072%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%221.8%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M%20243%2068%20l4%204%204%20-4%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%2F%3E%3Crect%20x%3D%22239%22%20y%3D%2221%22%20width%3D%2292%22%20height%3D%2272%22%20rx%3D%226%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%22285%22%20y%3D%2238%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3ETask%203%3C%2Ftext%3E%3Ctext%20x%3D%22285%22%20y%3D%2252%22%20font-size%3D%229%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3Eid%20%2F%20priority%3C%2Ftext%3E%3Crect%20x%3D%22247%22%20y%3D%2260%22%20width%3D%2276%22%20height%3D%2224%22%20rx%3D%224%22%20fill%3D%22%23DCEAF9%22%20stroke%3D%22%23548BC8%22%2F%3E%3Ctext%20x%3D%22285%22%20y%3D%2276%22%20font-size%3D%2211%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3EListNode%3C%2Ftext%3E%3C%2Fsvg%3E)每个 Task 内部已经包含 prev 和 next 指针，不再需要独立的链表节点包装 Task。
+
+这就是所谓的“侵入式”：容器的数据结构侵入了业务对象的定义。
+
+## 2. 为什么侵入式链表效率更高？
+
+主要有四个原因。
+
+### ① 减少内存分配
+
+普通链表在把一个已有 `Task` 放入链表时，往往需要：
+
+C++
+
+```
+Node* node = new Node;
+node->data = task;
+```
+
+侵入式链表只需要：
+
+C++
+
+```
+list_insert(&task->node);
+```
+
+不需要为了插入链表单独调用 `new`。
+
+在任务频繁加入和离开的场景中，减少内存分配通常非常有价值。
+
+### ② 更好的缓存局部性
+
+CPU 访问内存时，并不是每次都直接从主内存获取数据，而是会利用 CPU Cache。
+
+普通链表中：
+
+```
+Node → Task
+```
+
+节点与对象可能位于不同的内存位置。
+
+侵入式链表中：
+
+```
+Task {
+    id
+    priority
+    node
+}
+```
+
+节点和业务数据属于同一个对象，空间距离更近，通常更有利于缓存访问。
+
+不过需要注意：侵入式链表并不保证整个链表连续存储。如果各个 `Task` 本身分散在堆内存中，遍历时仍然可能产生大量 Cache Miss。
+
+### ③ 更少的内存开销
+
+假设在 64 位系统下：
+
+|
+数据结构
+
+|
+
+链表相关开销（每元素）
+
+|
+| --- | --- |
+|
+
+普通双向链表（节点存 `Task*`）
+
+|
+
+24 字节
+
+|
+|
+
+侵入式双向链表
+
+|
+
+16 字节
+
+|
+
+这里假设每个指针占 8 字节，不考虑额外的分配器开销和内存对齐差异。
+
+对于 100 万个元素：
+
+* 普通链表的节点字段约占 24 MB。
+
+* 侵入式链表的节点字段约占 16 MB。
+
+两者相差约 8 MB，而且普通链表可能还有额外的堆分配元数据和内存碎片。
+
+需要说明，这并不意味着所有普通链表都比侵入式链表多 8 字节。例如 `std::list<Task>` 可以直接将 `Task` 存储在节点中，而不是再保存一个 `Task*`。
+
+### ④ 已知节点时，插入和删除很直接
+
+侵入式双向链表删除一个节点：
+
+C++
+
+```
+void remove(ListNode* node) {
+    node->prev->next = node->next;
+    node->next->prev = node->prev;
+}
+```
+
+只修改几个指针，时间复杂度是 O(1)O(1)O(1)。
+
+这里有一个容易误解的地方：
+
+普通双向链表在已知节点位置时，同样可以做到 O(1)O(1)O(1) 删除。
+
+侵入式链表的主要优势不是降低这个操作的渐进复杂度，而是减少额外分配、包装和部分指针间接访问的开销。
+
+## 3. Linux 内核如何实现侵入式链表？
+
+Linux 内核中的 `list_head` 是非常经典的侵入式链表设计。
+
+简化后的定义类似：
+
+C
+
+```
+struct list_head {
+    struct list_head *next;
+    struct list_head *prev;
+};
+
+struct Task {
+    int id;
+    int priority;
+    struct list_head list;
+};
+```
+
+你可能会想到一个问题：
+
+链表里只有 `list_head*`，它没有存放 `Task*`，我们怎么从节点找到完整的 `Task`？
+
+答案是 `container_of`。
+
+假设 `Task` 的内存布局是：
+
+通过成员偏移量找回宿主对象
+
+![](data\:image/svg+xml;charset=utf-8,%3Csvg%20font-family%3D%22-apple-system-body%2C%20ui-sans-serif%2C%20-apple-system%2C%20system-ui%2C%20%26quot%3BSegoe%20UI%26quot%3B%2C%20Helvetica%2C%20%26quot%3BApple%20Color%20Emoji%26quot%3B%2C%20Arial%2C%20sans-serif%2C%20%26quot%3BSegoe%20UI%20Emoji%26quot%3B%2C%20%26quot%3BSegoe%20UI%20Symbol%26quot%3B%22%20font-weight%3D%22400%22%20data-d-component%3D%22svg%22%20fill%3D%22currentColor%22%20style%3D%22color%3Argb\(255%2C%20255%2C%20255\)%22%20viewBox%3D%220%200%20330%20173%22%20width%3D%22100%25%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20x%3D%2220%22%20y%3D%2211%22%20width%3D%22194%22%20height%3D%22148%22%20rx%3D%226%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.4%22%2F%3E%3Crect%20x%3D%2221%22%20y%3D%2212%22%20width%3D%22192%22%20height%3D%2230%22%20rx%3D%225%22%20fill%3D%22%23DCEAF9%22%2F%3E%3Ctext%20x%3D%22117%22%20y%3D%2232%22%20font-size%3D%2212%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3ETask%20%E8%B5%B7%E5%A7%8B%E5%9C%B0%E5%9D%80%200x1000%3C%2Ftext%3E%3Crect%20x%3D%2221%22%20y%3D%2244%22%20width%3D%22192%22%20height%3D%2233%22%20fill%3D%22%23F8E9CC%22%2F%3E%3Ctext%20x%3D%22117%22%20y%3D%2265%22%20font-size%3D%2212%22%20fill%3D%22%23885515%22%20text-anchor%3D%22middle%22%3Eid%20%2B%20priority%20\(8%20bytes\)%3C%2Ftext%3E%3Crect%20x%3D%2221%22%20y%3D%2279%22%20width%3D%22192%22%20height%3D%2279%22%20rx%3D%223%22%20fill%3D%22%23DCEAF9%22%2F%3E%3Ctext%20x%3D%22117%22%20y%3D%22106%22%20font-size%3D%2213%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3Elist_head%3C%2Ftext%3E%3Ctext%20x%3D%22117%22%20y%3D%22125%22%20font-size%3D%2211%22%20fill%3D%22%2324578A%22%20text-anchor%3D%22middle%22%3Enext%20%2F%20prev%3C%2Ftext%3E%3Cpath%20d%3D%22M%20215%2090%20H%20232%22%20stroke%3D%22%23548BC8%22%20stroke-width%3D%221.5%22%2F%3E%3Ctext%20x%3D%22240%22%20y%3D%2284%22%20font-size%3D%2210%22%20fill%3D%22currentColor%22%3E0x1008%3C%2Ftext%3E%3Cpath%20d%3D%22M%20241%2099%20V%2024%20H%20216%22%20fill%3D%22none%22%20stroke%3D%22%23C38A35%22%20stroke-width%3D%221.7%22%20stroke-dasharray%3D%224%203%22%2F%3E%3Cpath%20d%3D%22M%20221%2020%20L%20216%2024%20221%2028%22%20fill%3D%22none%22%20stroke%3D%22%23C38A35%22%20stroke-width%3D%221.6%22%2F%3E%3Ctext%20x%3D%22252%22%20y%3D%22142%22%20font-size%3D%2210%22%20fill%3D%22currentColor%22%20text-anchor%3D%22middle%22%3E%E5%87%8F%E5%8E%BB%E5%81%8F%E7%A7%BB%208%3C%2Ftext%3E%3C%2Fsvg%3E)示意布局：假设 list 成员距离 Task 起始地址 8 字节。
+
+对应的概念公式是：
+
+Task 地址=list 地址−offsetof⁡(Task,list)\text{Task 地址}=\text{list 地址}-\operatorname{offsetof}(\text{Task},\text{list})Task 地址=list 地址−offsetof(Task,list)
+
+一个简化的 C 写法：
+
+C
+
+```
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - offsetof(type, member)))
+```
+
+使用时：
+
+C
+
+```
+struct list_head *pos = /* 链表节点 */;
+
+struct Task *task =
+    container_of(pos, struct Task, list);
+```
+
+这样就可以通过嵌入的链表节点，找回完整的业务对象。
+
+这也是 Linux 内核侵入式数据结构设计的一个核心技巧。
+
+## 4. 一个特别强大的能力：一个对象可以属于多个链表
+
+假设操作系统中有一批任务，我们希望同时维护：
+
+* 一个所有任务的链表。
+
+* 一个等待执行的任务链表。
+
+* 一个超时任务链表。
+
+侵入式链表可以这样定义：
+
+C++
+
+```
+struct Task {
+    int id;
+    int priority;
+
+    ListNode all_node;
+    ListNode ready_node;
+    ListNode timeout_node;
+};
+```
+
+一个任务对象可以通过不同的节点，同时加入三个链表。
+
+![](data\:image/svg+xml;charset=utf-8,%3Csvg%20font-family%3D%22-apple-system-body%2C%20ui-sans-serif%2C%20-apple-system%2C%20system-ui%2C%20%26quot%3BSegoe%20UI%26quot%3B%2C%20Helvetica%2C%20%26quot%3BApple%20Color%20Emoji%26quot%3B%2C%20Arial%2C%20sans-serif%2C%20%26quot%3BSegoe%20UI%20Emoji%26quot%3B%2C%20%26quot%3BSegoe%20UI%20Symbol%26quot%3B%22%20font-weight%3D%22400%22%20data-d-component%3D%22svg%22%20fill%3D%22currentColor%22%20style%3D%22color%3Argb\(255%2C%20255%2C%20255\)%22%20viewBox%3D%220%200%20340%20182%22%20width%3D%22100%25%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20x%3D%22105%22%20y%3D%226%22%20width%3D%22130%22%20height%3D%2290%22%20rx%3D%228%22%20fill%3D%22%23F8E9CC%22%20stroke%3D%22%23C38A35%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2226%22%20font-size%3D%2213%22%20font-weight%3D%22600%22%20text-anchor%3D%22middle%22%20fill%3D%22%23885515%22%3ETask%3C%2Ftext%3E%3Crect%20x%3D%22117%22%20y%3D%2235%22%20width%3D%22106%22%20height%3D%2217%22%20rx%3D%223%22%20stroke%3D%22%23447EB6%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2247%22%20fill%3D%22%23447EB6%22%20font-size%3D%2210%22%20text-anchor%3D%22middle%22%3Eall_node%3C%2Ftext%3E%3Crect%20x%3D%22117%22%20y%3D%2255%22%20width%3D%22106%22%20height%3D%2217%22%20rx%3D%223%22%20stroke%3D%22%23238A79%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2267%22%20fill%3D%22%23238A79%22%20font-size%3D%2210%22%20text-anchor%3D%22middle%22%3Eready_node%3C%2Ftext%3E%3Crect%20x%3D%22117%22%20y%3D%2275%22%20width%3D%22106%22%20height%3D%2217%22%20rx%3D%223%22%20stroke%3D%22%23A569AB%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%2287%22%20fill%3D%22%23A569AB%22%20font-size%3D%2210%22%20text-anchor%3D%22middle%22%3Etimeout_node%3C%2Ftext%3E%3Cpath%20d%3D%22M%20117%2043%20H%2042%20V%20116%22%20fill%3D%22none%22%20stroke%3D%22%23447EB6%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M%20223%2063%20H%20297%20V%20116%22%20fill%3D%22none%22%20stroke%3D%22%23238A79%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M%20170%2092%20V%20116%22%20fill%3D%22none%22%20stroke%3D%22%23A569AB%22%20stroke-width%3D%221.5%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%22116%22%20width%3D%2293%22%20height%3D%2256%22%20rx%3D%225%22%20stroke%3D%22%23447EB6%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%2252.5%22%20y%3D%22131%22%20font-size%3D%2210%22%20fill%3D%22%23447EB6%22%20text-anchor%3D%22middle%22%3EAll%20tasks%3C%2Ftext%3E%3Crect%20x%3D%2219%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23447EB6%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23447EB6%22%2F%3E%3Cpath%20d%3D%22M%2038%20151%20h%206%22%20stroke%3D%22%23447EB6%22%2F%3E%3Crect%20x%3D%2244%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23447EB6%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23447EB6%22%2F%3E%3Cpath%20d%3D%22M%2063%20151%20h%206%22%20stroke%3D%22%23447EB6%22%2F%3E%3Crect%20x%3D%2269%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23447EB6%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23447EB6%22%2F%3E%3Crect%20x%3D%22123%22%20y%3D%22116%22%20width%3D%2294%22%20height%3D%2256%22%20rx%3D%225%22%20stroke%3D%22%23238A79%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%22170%22%20y%3D%22131%22%20font-size%3D%2210%22%20fill%3D%22%23238A79%22%20text-anchor%3D%22middle%22%3EReady%20queue%3C%2Ftext%3E%3Crect%20x%3D%22136%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23238A79%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23238A79%22%2F%3E%3Cpath%20d%3D%22M%20155%20151%20h%206%22%20stroke%3D%22%23238A79%22%2F%3E%3Crect%20x%3D%22161%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23238A79%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23238A79%22%2F%3E%3Cpath%20d%3D%22M%20180%20151%20h%206%22%20stroke%3D%22%23238A79%22%2F%3E%3Crect%20x%3D%22186%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23238A79%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23238A79%22%2F%3E%3Crect%20x%3D%22241%22%20y%3D%22116%22%20width%3D%2293%22%20height%3D%2256%22%20rx%3D%225%22%20stroke%3D%22%23A569AB%22%20fill%3D%22none%22%20stroke-width%3D%221.3%22%2F%3E%3Ctext%20x%3D%22287.5%22%20y%3D%22131%22%20font-size%3D%2210%22%20fill%3D%22%23A569AB%22%20text-anchor%3D%22middle%22%3ETimeout%20list%3C%2Ftext%3E%3Crect%20x%3D%22254%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23A569AB%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23A569AB%22%2F%3E%3Cpath%20d%3D%22M%20273%20151%20h%206%22%20stroke%3D%22%23A569AB%22%2F%3E%3Crect%20x%3D%22279%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23A569AB%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23A569AB%22%2F%3E%3Cpath%20d%3D%22M%20298%20151%20h%206%22%20stroke%3D%22%23A569AB%22%2F%3E%3Crect%20x%3D%22304%22%20y%3D%22143%22%20width%3D%2219%22%20height%3D%2216%22%20rx%3D%223%22%20fill%3D%22%23A569AB%22%20fill-opacity%3D%22.17%22%20stroke%3D%22%23A569AB%22%2F%3E%3C%2Fsvg%3E)同一个 Task 通过三个不同的嵌入节点，参与三个独立链表。
+
+这很适合需要按不同维度组织对象的系统。
+
+注意，每个 `ListNode` 通常在同一时间只能属于一个链表；要同时加入多个链表，必须使用不同的嵌入节点。
+
+## 5. 侵入式链表有什么缺点？
+
+它并非总是优于普通链表。
+
+|
+维度
+
+|
+
+普通链表
+
+|
+
+侵入式链表
+
+|
+| --- | --- | --- |
+|
+
+节点分配
+
+|
+
+通常由容器管理
+
+|
+
+通常无需单独分配节点
+
+|
+|
+
+缓存局部性
+
+|
+
+取决于实现
+
+|
+
+节点与宿主对象相邻
+
+|
+|
+
+插入/删除复杂度
+
+|
+
+已知节点时 O(1)O(1)O(1)
+
+|
+
+已知节点时 O(1)O(1)O(1)
+
+|
+|
+
+对业务类型的侵入
+
+|
+
+低
+
+|
+
+高
+
+|
+|
+
+对象生命周期管理
+
+|
+
+容器通常负责
+
+|
+
+调用方通常负责
+
+|
+|
+
+同时参与多个链表
+
+|
+
+需要多个节点或包装
+
+|
+
+可嵌入多个节点
+
+|
+|
+
+安全性与易用性
+
+|
+
+通常更容易管理
+
+|
+
+需要谨慎管理指针和生命周期
+
+|
+
+最重要的风险是对象生命周期。
+
+例如：
+
+C++
+
+```
+Task* task = new Task;
+
+list_insert(&task->node);
+
+delete task; // 危险！
+```
+
+如果没有先把 `task->node` 从链表中移除，链表就会保留指向已释放内存的指针，造成 Use-After-Free。
+
+另外，移动或复制含有已链接节点的对象也可能破坏链表关系，因此这类对象通常需要限制移动和复制，或采取特殊处理。
+
+## 6. 什么时候适合使用？
+
+侵入式链表尤其适合以下场景：
+
+* 操作系统内核：任务队列、设备对象管理、内存管理。
+
+* 高性能网络服务：连接管理、超时队列、事件管理。
+
+* 内存池和对象池：在已分配对象之间组织空闲链表。
+
+* 嵌入式或实时系统：希望避免链表操作期间发生动态分配。
+
+* 游戏引擎：管理大量频繁加入和退出集合的实体。
+
+在 C++ 中，可以参考 Boost.Intrusive，它提供了侵入式链表、集合等容器的实现。
+
+## 7. 最后总结
+
+侵入式链表的高性能本质，可以归纳成一个思路：
+
+把管理对象所需要的数据结构，提前放进对象自身，用对象布局上的约束，换取运行时的效率。
+
+它不改变双向链表插入和删除的 O(1)O(1)O(1) 时间复杂度，但可以：
+
+1. 避免单独为链表节点分配内存。
+
+2. 减少额外的指针和部分间接访问。
+
+3. 改善节点与宿主对象之间的缓存局部性。
+
+4. 让一个对象通过多个嵌入节点参与不同链表。
+
+如果你正在学习 Linux 内核或高性能 C++，我非常建议进一步理解 `container_of`、`list_head` 和对象生命周期管理。掌握这三个概念，基本就能读懂侵入式链表的核心实现了。
